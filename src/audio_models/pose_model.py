@@ -98,8 +98,9 @@ class Audio2PoseModel(nn.Module):
         embeddings = self.audio_encoder(input_value, seq_len=seq_len, output_hidden_states=True)
     
         if self._only_last_features:
-            hidden_states = embeddings.last_hidden_data
+            hidden_states = embeddings.last_hidden_state  # Correct attribute
         else:
+            # Ensure hidden states are aggregated correctly if using all layers
             hidden_states = sum(embeddings.hidden_states) / len(embeddings.hidden_states)
     
         hidden_states = self.in_fn(hidden_states)
@@ -107,7 +108,7 @@ class Audio2PoseModel(nn.Module):
         id_embedding = self.id_embed(id_seed).unsqueeze(1)
     
         init_pose = torch.zeros([hidden_states.shape[0], 1, self.out_dim]).to(hidden_states.device)
-        for i in range(seq_length):
+        for i in range(seq_len):
             if i == 0:
                 pose_emb = self.pose_map(init_pose)
                 pose_input = self.PPE(pose_emb)
@@ -116,13 +117,10 @@ class Audio2PoseModel(nn.Module):
     
             pose_input = pose_input + id_embedding
             tgt_mask = self.biased_mask[:, :pose_input.shape[1], :pose_input.shape[1]].clone().detach().to(hidden_states.device)
-            # Ensure the target mask is correctly sized
-            tgt_mask = tgt_mask.expand(pose_input.shape[0], -1, -1)  # Adjusting to match batch size
+            tgt_mask = tgt_mask.expand(pose_input.shape[0], -1, -1)  # Ensuring the mask matches the batch size
             memory_mask = enc_dec_mask(hidden_states.device, pose_input.shape[1], hidden_states.shape[1])
             pose_out = self.transformer_decoder(pose_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             pose_out = self.pose_map_r(pose_out)
             new_output = self.pose_map(pose_out[:,-1,:]).unsqueeze(1)
-            pose_emb = torch.cat((pose_emb, new_output), 1)
+            pose_emb = torch.cat((pose_emb, new_private_output), 1)
         return pose_out
-
-    
