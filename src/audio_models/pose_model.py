@@ -96,7 +96,7 @@ class Audio2PoseModel(nn.Module):
 
     def infer(self, input_value, seq_len, id_delay=None):
         # Extract embeddings from the audio encoder
-        embeddings = self.audio.contrib(input_value, seq_len=seq_len, output_hidden_states=True)
+        embeddings = self.audio_encoder(input_value, seq_len=seq_len, output_hidden_states=True)
         if self._only_last_features:
             hidden_states = embeddings.last_hidden_state
         else:
