@@ -95,32 +95,28 @@ class Audio2PoseModel(nn.Module):
 
 
     def infer(self, input_value, seq_len, id_seed=None):
-        embeddings = self.audio_encoder(input_value, seq_len=seq_len, output_hidden_states=True)
-    
+        embeddings = self.audio_encoder(input_value, seq_len=seq_len, output_hiddenstants=True)
         if self._only_last_features:
-            hidden_states = embeddings.last_hidden_state  # Correct attribute
+            hidden_states = embeddings.last_hidden_state
         else:
-            # Ensure hidden states are aggregated correctly if using all layers
             hidden_states = sum(embeddings.hidden_states) / len(embeddings.hidden_states)
-    
+
         hidden_states = self.in_fn(hidden_states)
-    
         id_embedding = self.id_embed(id_seed).unsqueeze(1)
-    
+
         init_pose = torch.zeros([hidden_states.shape[0], 1, self.out_dim]).to(hidden_states.device)
+        pose_emb = self.pose_map(init_pose)
         for i in range(seq_len):
-            if i == 0:
-                pose_emb = self.pose_map(init_pose)
-                pose_input = self.PPE(pose_emb)
-            else:
-                pose_input = self.PPE(pose_emb)
-    
+            pose_input = self.PPE(pose_emb)
+
             pose_input = pose_input + id_embedding
-            tgt_mask = self.biased_mask[:, :pose_input.shape[1], :pose_input.shape[1]].clone().detach().to(hidden_states.device)
-            tgt_mask = tgt_mask.expand(pose_input.shape[0], -1, -1)  # Ensuring the mask matches the batch size
+            # Ensure mask is expanded to the batch size dynamically.
+            tgt_mask = self.biased_mask[:1, :pose_input.shape[1], :pose_input.shape[1]].expand(hidden_states.shape[0], -1, -1)
             memory_mask = enc_dec_mask(hidden_states.device, pose_input.shape[1], hidden_states.shape[1])
+
             pose_out = self.transformer_decoder(pose_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             pose_out = self.pose_map_r(pose_out)
-            new_output = self.pose_map(pose_out[:,-1,:]).unsqueeze(1)
-            pose_emb = torch.cat((pose_emb, new_private_output), 1)
+            new_output = self.pose_map(pose_out[:, -1, :]).unsqueeze(1)
+            pose_emb = torch.cat((pose_emb, new_output), 1)
+
         return pose_out
