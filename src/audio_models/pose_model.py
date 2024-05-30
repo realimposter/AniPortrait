@@ -58,7 +58,7 @@ class Audio2PoseModel(nn.Module):
 
         latent_dim = config['latent_dim']
         model_path = config['model_path']
-        only_last_features = config['only_last_features']
+        only_last_features = True #config['only_last_features']
         from_pretrained = config['from_pretrained']
         out_dim = config['out_dim']
 
