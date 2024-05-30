@@ -87,6 +87,9 @@ class Audio2PoseModel(nn.Module):
 
     def infer(self, input_value, seq_len, id_seed=None):
         batch_size = input_value.size(0)
+        print("batch_size:  ", batch_size)
+        print("seq_len:  ", seq_len)
+        print("input_value:  ", input_value.shape)
         embeddings = self.audio_encoder(input_value, seq_len=seq_len, output_hidden_states=True)
 
         if self._only_last_features:
