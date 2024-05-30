@@ -20,8 +20,8 @@ def init_biased_mask(n_head, max_seq_len, period):
             closest_power_of_2 = 2**math.floor(math.log2(n)) 
             return get_slopes_power_of_2(closest_power_of_2) + get_slopes(2*closest_power_of_2)[0::2][:n-closest_power_of_2]
     slopes = torch.Tensor(get_slopes(n_head))
-    bias = torch.arange(start=0, end=max_seq_len, step=period).unsqueeze(1).repeat(1,period).view(-1)//(period)
-    bias = - torch.flip(bias,dims=[0])
+    bias = torch.arange(start=0, end=max_seq_len, step=period).unsqueeze(1).repeat(1, period).view(-1) // (period)
+    bias = - torch.flip(bias, dims=[0])
     alibi = torch.zeros(max_seq_len, max_seq_len)
     for i in range(max_seq_len):
         alibi[i, :i+1] = bias[-(i+1):]
@@ -36,7 +36,7 @@ def enc_dec_mask(device, T, S):
     mask = torch.ones(T, S)
     for i in range(T):
         mask[i, i] = 0
-    return (mask==1).to(device=device)
+    return (mask == 1).to(device=device)
 
 
 class PositionalEncoding(nn.Module):
@@ -86,19 +86,18 @@ class Audio2PoseModel(nn.Module):
         self.in_fn = nn.Linear(hidden_size, latent_dim)
 
         self.PPE = PositionalEncoding(latent_dim)
-        self.biased_mask = init_biased_mask(n_head = 8, max_seq_len = 600, period=1)
-        decoder_layer = nn.TransformerDecoderLayer(d_model=latent_dim, nhead=8, dim_feedforward=2*latent_dim, batch_first=True)        
+        self.biased_mask = init_biased_mask(n_head=8, max_seq_len=600, period=1)
+        decoder_layer = nn.TransformerDecoderLayer(d_model=latent_dim, nhead=8, dim_feedforward=2*latent_dim, batch_first=True)
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=8)
         self.pose_map_r = nn.Linear(latent_dim, out_dim)
 
-        self.id_embed = nn.Embedding(100, latent_dim) # 100 ids
-
+        self.id_embed = nn.Embedding(100, latent_dim)  # 100 ids
 
     def infer(self, input_value, seq_len, id_seed=None):
         embeddings = self.audio_encoder(input_value, seq_len=seq_len, output_hidden_states=True)
     
         if self._only_last_features:
-            hidden_states = embeddings.last_hidden_data
+            hidden_states = embeddings.last_hidden_state
         else:
             hidden_states = sum(embeddings.hidden_states) / len(embeddings.hidden_states)
     
@@ -118,7 +117,6 @@ class Audio2PoseModel(nn.Module):
     
             pose_input = pose_input + id_embedding
             tgt_mask = self.biased_mask[:, :pose_input.shape[1], :pose_input.shape[1]].clone().detach().to(hidden_states.device)
-            # Ensure the target mask is correctly sized
             tgt_mask = tgt_mask.expand(pose_input.shape[0], -1, -1)  # Adjusting to match batch size
             memory_mask = enc_dec_mask(hidden_states.device, pose_input.shape[1], hidden_states.shape[1])
 
@@ -130,7 +128,7 @@ class Audio2PoseModel(nn.Module):
 
             pose_out = self.transformer_decoder(pose_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             pose_out = self.pose_map_r(pose_out)
-            new_output = self.pose_map(pose_out[:,-1,:]).unsqueeze(1)
+            new_output = self.pose_map(pose_out[:, -1, :]).unsqueeze(1)
             pose_emb = torch.cat((pose_emb, new_output), 1)
 
         return pose_out
