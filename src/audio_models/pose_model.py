@@ -107,9 +107,11 @@ class Audio2PoseModel(nn.Module):
         id_embedding = self.id_embed(id_seed).unsqueeze(1)
     
         init_pose = torch.zeros([hidden_states.shape[0], 1, self.out_dim]).to(hidden_states.device)
+        pose_emb = self.pose_map(init_pose)
+        seq_length = hidden_states.shape[1]
+
         for i in range(seq_length):
             if i == 0:
-                pose_emb = self.pose_map(init_pose)
                 pose_input = self.PPE(pose_emb)
             else:
                 pose_input = self.PPE(pose_emb)
@@ -119,10 +121,16 @@ class Audio2PoseModel(nn.Module):
             # Ensure the target mask is correctly sized
             tgt_mask = tgt_mask.expand(pose_input.shape[0], -1, -1)  # Adjusting to match batch size
             memory_mask = enc_dec_mask(hidden_states.device, pose_input.shape[1], hidden_states.shape[1])
+
+            # Debugging prints
+            print(f"pose_input.shape: {pose_input.shape}")
+            print(f"hidden_states.shape: {hidden_states.shape}")
+            print(f"tgt_mask.shape: {tgt_mask.shape}")
+            print(f"memory_mask.shape: {memory_mask.shape}")
+
             pose_out = self.transformer_decoder(pose_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
             pose_out = self.pose_map_r(pose_out)
             new_output = self.pose_map(pose_out[:,-1,:]).unsqueeze(1)
             pose_emb = torch.cat((pose_emb, new_output), 1)
-        return pose_out
 
-    
+        return pose_out
