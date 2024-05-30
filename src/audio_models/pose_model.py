@@ -116,14 +116,19 @@ class Audio2PoseModel(nn.Module):
                 pose_input = self.PPE(pose_emb)
     
             pose_input = pose_input + id_embedding
-            tgt_mask = self.biased_mask[:, :pose_input.shape[1], :pose_input.shape[1]].clone().detach().to(hidden_states.device)
-            tgt_mask = tgt_mask.expand(pose_input.shape[0], -1, -1)  # Adjusting to match batch size
-            memory_mask = enc_dec_mask(hidden_states.device, pose_input.shape[1], hidden_states.shape[1])
 
             # Debugging prints
             print(f"pose_input.shape: {pose_input.shape}")
             print(f"hidden_states.shape: {hidden_states.shape}")
+
+            tgt_mask = self.biased_mask[:, :pose_input.shape[1], :pose_input.shape[1]].clone().detach().to(hidden_states.device)
+            # Ensure the target mask is correctly sized
+            tgt_mask = tgt_mask.expand(hidden_states.shape[0], -1, -1)  # Adjusting to match batch size
+
             print(f"tgt_mask.shape: {tgt_mask.shape}")
+
+            memory_mask = enc_dec_mask(hidden_states.device, pose_input.shape[1], hidden_states.shape[1])
+
             print(f"memory_mask.shape: {memory_mask.shape}")
 
             pose_out = self.transformer_decoder(pose_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
