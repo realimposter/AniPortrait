@@ -53,17 +53,22 @@ class PositionalEncoding(nn.Module):
         return x
 
 class Audio2PoseModel(nn.Module):
-    def __init__(self, config):
+    def __init__(
+        self,
+        config
+    ):  
+        
         super().__init__()
-
+        
         latent_dim = config['latent_dim']
         model_path = config['model_path']
-        only_last_features = True #config['only_last_features']
+        only_last_fetures = config['only_last_fetures']
         from_pretrained = config['from_pretrained']
         out_dim = config['out_dim']
 
         self.out_dim = out_dim
-        self._only_last_features = only_last_features
+
+        self._only_last_features = only_last_fetures
 
         self.audio_encoder_config = Wav2Vec2Config.from_pretrained(model_path, local_files_only=True)
         if from_pretrained:
@@ -78,12 +83,12 @@ class Audio2PoseModel(nn.Module):
         self.in_fn = nn.Linear(hidden_size, latent_dim)
 
         self.PPE = PositionalEncoding(latent_dim)
-        self.biased_mask = None
-        decoder_layer = nn.TransformerDecoderLayer(d_model=latent_dim, nhead=8, dim_feedforward=2 * latent_dim, batch_first=True)
+        self.biased_mask = init_biased_mask(n_head = 8, max_seq_len = 600, period=1)
+        decoder_layer = nn.TransformerDecoderLayer(d_model=latent_dim, nhead=8, dim_feedforward=2*latent_dim, batch_first=True)        
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=8)
         self.pose_map_r = nn.Linear(latent_dim, out_dim)
 
-        self.id_embed = nn.Embedding(100, latent_dim)  # 100 ids
+        self.id_embed = nn.Embedding(100, latent_dim) # 100 ids
     
     def infer(self, input_value, seq_len, id_seed=None):
         print('input_value', input_value.shape)
