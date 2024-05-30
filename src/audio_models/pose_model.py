@@ -84,40 +84,46 @@ class Audio2PoseModel(nn.Module):
         self.pose_map_r = nn.Linear(latent_dim, out_dim)
 
         self.id_embed = nn.Embedding(100, latent_dim)  # 100 ids
-
+    
     def infer(self, input_value, seq_len, id_seed=None):
-        batch_size = input_value.size(0)
-        print("batch_size:  ", batch_size)
-        print("seq_len:  ", seq_len)
-        print("input_value:  ", input_value.shape)
+        print('input_value', input_value.shape)
+        print('seq_len', seq_len)
+        print('id_seed', id_seed)
         embeddings = self.audio_encoder(input_value, seq_len=seq_len, output_hidden_states=True)
-
+        print('embeddings', embeddings.last_hidden_state.shape)
         if self._only_last_features:
             hidden_states = embeddings.last_hidden_state
+            print('hidden_states', hidden_states.shape)
         else:
             hidden_states = sum(embeddings.hidden_states) / len(embeddings.hidden_states)
 
         hidden_states = self.in_fn(hidden_states)
-        print("hidden_states:  ", hidden_states.shape)
+        print('hidden_states', hidden_states.shape)
+
         id_embedding = self.id_embed(id_seed).unsqueeze(1)
-
-        init_pose = torch.zeros([batch_size, 1, self.out_dim]).to(hidden_states.device)
-        pose_emb = self.pose_map(init_pose)
-        pose_input = self.PPE(pose_emb)
-
-        if self.biased_mask is None:
-            self.biased_mask = init_biased_mask(n_head=8, max_seq_len=600, period=1, batch_size=batch_size)
-
+        print('id_embedding', id_embedding.shape)
+        init_pose = torch.zeros([hidden_states.shape[0], 1, self.out_dim]).to(hidden_states.device)
+        print('init_pose', init_pose.shape)
         for i in range(seq_len):
+            if i==0:
+                pose_emb = self.pose_map(init_pose)
+                pose_input = self.PPE(pose_emb)
+            else:
+                pose_input = self.PPE(pose_emb)
+            print('pose_input', pose_input.shape)
             pose_input = pose_input + id_embedding
-            print("pose_input:  ", pose_input.shape)
-            tgt_mask = self.biased_mask[:, :, :pose_input.shape[1], :pose_input.shape[1]].clone().detach().to(hidden_states.device)
-            print("tgt_mask:  ", tgt_mask.shape)
-            memory_mask = enc_dec_mask(hidden_states.device, pose_input.shape[1], hidden_states.shape[1], batch_size)
-            print("memory_mask:  ", memory_mask.shape)
+            print('pose_input', pose_input.shape)
+            tgt_mask = self.biased_mask[:, :pose_input.shape[1], :pose_input.shape[1]].clone().detach().to(hidden_states.device)
+            print('tgt_mask', tgt_mask.shape)
+            memory_mask = enc_dec_mask(hidden_states.device,  pose_input.shape[1], hidden_states.shape[1])
+            print('memory_mask', memory_mask.shape)
             pose_out = self.transformer_decoder(pose_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
-            print("pose_out:  ", pose_out.shape)
+            print('pose_out', pose_out.shape)
             pose_out = self.pose_map_r(pose_out)
-            new_output = self.pose_map(pose_out[:, -1, :]).unsqueeze(1)
+            print('pose_out', pose_out.shape)
+            new_output = self.pose_map(pose_out[:,-1,:]).unsqueeze(1)
+            print('new_output', new_output.shape)
             pose_emb = torch.cat((pose_emb, new_output), 1)
+            print('pose_emb', pose_emb.shape)
         return pose_out
+    
