@@ -126,6 +126,7 @@ class Audio2PoseModel(nn.Module):
             print('tgt_mask', tgt_mask.shape)
             # convert tgt_mask from torch.Size([8, 1, 1]) to torch.Size([1,8, 1, 1]) by adding the batch dimension
             tgt_mask = tgt_mask.unsqueeze(0)
+            print('tgt_mask', tgt_mask.shape)
             memory_mask = enc_dec_mask(hidden_states.device,  pose_input.shape[1], hidden_states.shape[1])
             print('memory_mask', memory_mask.shape)
             pose_out = self.transformer_decoder(pose_input, hidden_states, tgt_mask=tgt_mask, memory_mask=memory_mask)
